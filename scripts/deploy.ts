@@ -1,29 +1,46 @@
-// We require the Hardhat Runtime Environment explicitly here. This is optional
-// but useful for running the script in a standalone fashion through `node <script>`.
-//
-// When running the script with `npx hardhat run <script>` you'll find the Hardhat
-// Runtime Environment's members available in the global scope.
-import { ethers } from "hardhat";
+import type { ContractReceipt } from "ethers";
+import { ethers, network } from "hardhat";
 
 async function main() {
-  // Hardhat always runs the compile task when running scripts with its command
-  // line interface.
-  //
-  // If this script is run directly using `node` you may want to call compile
-  // manually to make sure everything is compiled
-  // await hre.run('compile');
+  console.log("deploying to network:", network.name);
 
-  // We get the contract to deploy
-  const Greeter = await ethers.getContractFactory("Greeter");
-  const greeter = await Greeter.deploy("Hello, Hardhat!");
+  const Factory = await ethers.getContractFactory("Factory");
+  const Token = await ethers.getContractFactory("Token");
 
-  await greeter.deployed();
+  const factory = await Factory.deploy();
+  await factory.deployed();
 
-  console.log("Greeter deployed to:", greeter.address);
+  console.log(`Factory address: ${factory.address}`);
+
+  const token = await Token.deploy("Tether", "USDT", (10 ** 18).toString());
+  await token.deployed();
+
+  console.log(`Tether Token address: ${token.address}`);
+
+  const tx = await factory.createExchange(token.address);
+  const receipt = await tx.wait();
+  const exchangeAddress = getExchangeAddressFromReceipt(receipt);
+
+  console.log(`Exchange address for ETH/USDT: ${exchangeAddress}`);
 }
 
-// We recommend this pattern to be able to use async/await everywhere
-// and properly handle errors.
+function getExchangeAddressFromReceipt(receipt: ContractReceipt): string {
+  if (!receipt.events) {
+    throw new Error("no events found on contract receipt");
+  }
+  const event = receipt.events.find((e) => e.event === "DeployedExchange");
+  if (!event) {
+    throw new Error("DeployedExchange event not found on contract receipt");
+  }
+  if (!event?.args?.length) {
+    throw new Error("no args found on DeployedExchange event");
+  }
+  if (event.args.length !== 2) {
+    throw new Error("invalid DeployedExchange event arguments");
+  }
+  return event.args[1];
+}
+
 main().catch((error) => {
   console.error(error);
   process.exitCode = 1;

@@ -4,7 +4,9 @@
   "description": "The project serves as a demo on how to perform arbitrage between a centralised order book crypto exchange and a decentralised AMM exchange.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.ts --network localhost"
   },
   "repository": {
     "type": "git",
