@@ -6,8 +6,7 @@
   "scripts": {
     "test": "hardhat test",
     "node": "hardhat node",
-    "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
-    "init:local": "hardhat run scripts/init.ts --network localhost"
+    "start": "hardhat run scripts/run.ts --network localhost",
   },
   "repository": {
     "type": "git",
