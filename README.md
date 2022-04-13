@@ -10,7 +10,7 @@ For the DEX we will be using a solidity clone of the Uniswap V1 contracts (for s
 
 ## CEX
 
-We will use Kraken for the CEX. As we will only be running the bot locally and on test nets, we will only use the CEX API to retrieve data, calls to create orders on the CEX will be mocked.
+We will use Binance for the CEX. As we will only be running the bot locally and on test nets, we will only use the CEX API to retrieve data, calls to create orders on the CEX will be mocked.
 
 ## Trading Pair
 
