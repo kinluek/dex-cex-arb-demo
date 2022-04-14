@@ -4,7 +4,7 @@ import { EthUsdtPriceStream } from "../lib/dex";
 const { utils } = ethers;
 
 /**
- * Script configurantion parameters.
+ * Program configurantion parameters.
  */
 const TETHER_TOKEN_SUPPLY = utils.parseUnits((10 ** 18).toString(), 6); // Tether's smallest division is to 6 decimal places.
 const INITIAL_ETH_PRICE_IN_MICRO_USDT = utils.parseUnits("3018.42", 6); // change this based on whatever the current price of ETH is.

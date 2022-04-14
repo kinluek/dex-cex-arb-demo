@@ -27,6 +27,9 @@ export class EthUsdtPriceStream {
   ) {
     const filterFromExchange = token.filters.Transfer(exchangeAddress);
     const filterToExchange = token.filters.Transfer(null, exchangeAddress);
+
+    // any transfer to or from the exchange will cause a price change.
+    // for every event, we calcuate the current prices based on the liquidity ratios.
     this.token.on(filterFromExchange, () => this.getExchangePrices(this.exchange));
     this.token.on(filterToExchange, () => this.getExchangePrices(this.exchange));
   }

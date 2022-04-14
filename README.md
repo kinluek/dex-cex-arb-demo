@@ -15,3 +15,19 @@ We will use Binance for the CEX. As we will only be running the bot locally and 
 ## Trading Pair
 
 We will use the ETH/USDT pool (DEX) and market (CEX) to perform arbitrage between.
+
+## Setup
+
+```bash
+# make sure you are LTS version of node for hardhat to work.
+$ nvm use --lts
+
+# install dependencies
+$ npm install
+
+# start hardhat local node
+$ npm run node
+
+# run the program
+$ npm start
+```
