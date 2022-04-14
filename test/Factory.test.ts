@@ -3,8 +3,7 @@ import type { BigNumber, Contract } from "ethers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-const toWei = (value: BigNumber | number) =>
-  ethers.utils.parseEther(value.toString());
+const toWei = (value: BigNumber | number) => ethers.utils.parseEther(value.toString());
 
 describe("Factory", () => {
   // let owner;
@@ -29,14 +28,10 @@ describe("Factory", () => {
 
   describe("createExchange", () => {
     it("deploys an exchange", async () => {
-      const exchangeAddress = await factory.callStatic.createExchange(
-        token.address
-      );
+      const exchangeAddress = await factory.callStatic.createExchange(token.address);
       await factory.createExchange(token.address);
 
-      expect(await factory.tokenToExchange(token.address)).to.equal(
-        exchangeAddress
-      );
+      expect(await factory.tokenToExchange(token.address)).to.equal(exchangeAddress);
 
       const Exchange = await ethers.getContractFactory("Exchange");
       const exchange = await Exchange.attach(exchangeAddress);
@@ -46,30 +41,24 @@ describe("Factory", () => {
     });
 
     it("doesn't allow zero address", async () => {
-      await expect(
-        factory.createExchange("0x0000000000000000000000000000000000000000")
-      ).to.be.revertedWith("invalid token address");
+      await expect(factory.createExchange("0x0000000000000000000000000000000000000000")).to.be.revertedWith(
+        "invalid token address"
+      );
     });
 
     it("fails when exchange exists", async () => {
       await factory.createExchange(token.address);
 
-      await expect(factory.createExchange(token.address)).to.be.revertedWith(
-        "exchange already exists"
-      );
+      await expect(factory.createExchange(token.address)).to.be.revertedWith("exchange already exists");
     });
   });
 
   describe("getExchange", () => {
     it("returns exchange address by token address", async () => {
-      const exchangeAddress = await factory.callStatic.createExchange(
-        token.address
-      );
+      const exchangeAddress = await factory.callStatic.createExchange(token.address);
       await factory.createExchange(token.address);
 
-      expect(await factory.getExchange(token.address)).to.equal(
-        exchangeAddress
-      );
+      expect(await factory.getExchange(token.address)).to.equal(exchangeAddress);
     });
   });
 });

@@ -6,20 +6,19 @@ module.exports = {
     node: true,
   },
   plugins: ["@typescript-eslint"],
-  extends: [
-    "standard",
-    "plugin:prettier/recommended",
-    "plugin:node/recommended",
-  ],
+  extends: ["standard", "plugin:prettier/recommended", "plugin:node/recommended"],
   parser: "@typescript-eslint/parser",
   parserOptions: {
     ecmaVersion: 12,
   },
   rules: {
-    "node/no-unsupported-features/es-syntax": [
+    "prettier/prettier": [
       "error",
-      { ignores: ["modules"] },
+      {
+        printWidth: 120,
+      },
     ],
+    "node/no-unsupported-features/es-syntax": ["error", { ignores: ["modules"] }],
     "node/no-missing-import": [
       "error",
       {
