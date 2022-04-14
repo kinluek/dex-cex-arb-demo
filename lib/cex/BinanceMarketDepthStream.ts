@@ -1,6 +1,22 @@
 import WebSocket from "ws";
 
-type OnMessageCallback = (msg: Buffer) => void;
+/**
+ * Market depth message received on the binance depth websocket stream.
+ */
+type MarketDepth = {
+  e: string;
+  E: number;
+  s: string;
+  U: number;
+  u: number;
+  b: Array<string[]>; // bids
+  a: Array<string[]>; // asks
+};
+
+/**
+ * Callback provided to the BinanceMarketDepthStream instance to handle depth messages.
+ */
+type OnMessageCallback = (msg: MarketDepth) => void;
 
 /**
  * BinanceMarketDepthStream subscribes to a binance depth screen and has functionality
@@ -15,11 +31,7 @@ export class BinanceMarketDepthStream {
   private CLOSE_CODE_END = 3000;
   private CLOSE_CODE_RECONN = 3001;
 
-  constructor(
-    readonly marketId: string,
-    readonly timeoutMs: number,
-    private onMessage: OnMessageCallback
-  ) {
+  constructor(readonly marketId: string, readonly timeoutMs: number, private onMessage: OnMessageCallback) {
     this.lastReceiveTime = new Date().getTime();
     this.streamUrl = `wss://stream.binance.com:9443/ws/${marketId}@depth@1000ms`;
     this.ws = new WebSocket(this.streamUrl);
@@ -37,10 +49,10 @@ export class BinanceMarketDepthStream {
    * Wraps the user provided onMessage callback function to keep track of the last message
    * receive time which is used to determine whether the connection should reconnect.
    */
-  private onMessageWrapper = (): OnMessageCallback => {
+  private onMessageWrapper = (): ((msg: Buffer) => void) => {
     return (msg: Buffer) => {
       this.lastReceiveTime = new Date().getTime();
-      this.onMessage(msg);
+      this.onMessage(JSON.parse(msg.toString()));
     };
   };
 
@@ -62,13 +74,13 @@ export class BinanceMarketDepthStream {
 
   private onClose = (code: number, reason: Buffer) => {
     if (code !== this.CLOSE_CODE_END) {
-      console.log(`connection was closed unexpectedly`);
+      console.log("connection was closed unexpectedly");
       console.log(`code: ${code} - reason: ${reason.toString()}`);
       console.log("reconnecting...");
       this.ws = new WebSocket(this.streamUrl);
       this.attachListeners(this.ws);
     }
-    console.log(`connection was closed`);
+    console.log("connection was closed");
   };
 
   public close = () => {
