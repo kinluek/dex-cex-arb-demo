@@ -3,7 +3,7 @@ import WebSocket from "ws";
 /**
  * Market depth message received on the binance depth websocket stream.
  */
-type MarketDepth = {
+export type MarketDepth = {
   e: string;
   E: number; // unix event time.
   s: string;
@@ -16,7 +16,7 @@ type MarketDepth = {
 /**
  * Callback provided to the BinanceMarketDepthStream instance to handle depth messages.
  */
-type OnMessageCallback = (msg: MarketDepth) => void;
+export type OnDepthCallback = (msg: MarketDepth) => void;
 
 /**
  * BinanceMarketDepthStream subscribes to a binance depth screen and has functionality
@@ -38,15 +38,15 @@ export class BinanceMarketDepthStream {
     this.marketId = marketId;
     this.timeoutMs = timeoutMs;
     this.lastReceiveTime = new Date().getTime();
-    this.streamUrl = `wss://stream.binance.com:9443/ws/${marketId}@depth@1000ms`;
+    this.streamUrl = `wss://stream.binance.com:9443/ws/${marketId}@depth@100ms`;
     this.ws = new WebSocket(this.streamUrl);
   }
 
-  public listen(onMessage: OnMessageCallback) {
+  public listen(onMessage: OnDepthCallback) {
     this.attachListeners(this.ws, onMessage);
   }
 
-  private attachListeners = (ws: WebSocket, onMessage: OnMessageCallback) => {
+  private attachListeners = (ws: WebSocket, onMessage: OnDepthCallback) => {
     ws.on("open", this.onOpen);
     ws.on("message", this.onMessageWrapper(onMessage));
     ws.on("error", this.onError);
@@ -58,7 +58,7 @@ export class BinanceMarketDepthStream {
    * receive time which is used to determine whether the connection should reconnect.
    * Out of date events are ignored.
    */
-  private onMessageWrapper = (onMessage: OnMessageCallback): ((msg: Buffer) => void) => {
+  private onMessageWrapper = (onMessage: OnDepthCallback): ((msg: Buffer) => void) => {
     return (msg: Buffer) => {
       this.lastReceiveTime = new Date().getTime();
       const event: MarketDepth = JSON.parse(msg.toString());
@@ -88,7 +88,7 @@ export class BinanceMarketDepthStream {
   /**
    * Makes sure websocket is reopened and configured in case of unexpected closure.
    */
-  private onCloseWrapper = (onMessage: OnMessageCallback): ((code: number, reason: Buffer) => void) => {
+  private onCloseWrapper = (onMessage: OnDepthCallback): ((code: number, reason: Buffer) => void) => {
     return (code: number, reason: Buffer) => {
       if (code !== this.CLOSE_CODE_END) {
         console.log("connection was closed unexpectedly");
@@ -103,5 +103,6 @@ export class BinanceMarketDepthStream {
 
   public close() {
     this.ws.close(this.CLOSE_CODE_END);
+    this.ws.removeAllListeners();
   }
 }

@@ -1,5 +1,7 @@
 import { ContractReceipt } from "ethers";
 import { ethers, network } from "hardhat";
+import { Arbitrage } from "../lib/arb/Arbitrage";
+import { BinanceMarketDepthStream } from "../lib/cex";
 import { EthUsdtPriceStream } from "../lib/dex";
 const { utils } = ethers;
 
@@ -41,15 +43,11 @@ async function main() {
 
   console.log(`Exchange address for ETH/USDT: ${exchangeAddress}`);
 
-  // const priceOfEthInMicroUsdt = INITIAL_ETH_PRICE_IN_MICRO_USDT;
-  // const priceOfUsdtInWei = INITIAL_USDT_PRICE_IN_WEI;
-
-  const priceDexPriceStream = new EthUsdtPriceStream(token, exchange, exchangeAddress).listen((p) => {
-    const ethInMicroUsdt = utils.formatUnits(p.ethInMicroUsdt.toString(), 6);
-    const usdtInWei = utils.formatEther(p.usdtInWei.toString());
-    console.log(`new price of eth: ${ethInMicroUsdt} USDT`);
-    console.log(`new price of usdt: ${usdtInWei} ETH`);
-  });
+  // Run arbitrage bot
+  const cexStream = new BinanceMarketDepthStream("ethusdt", 3000);
+  const dexStream = new EthUsdtPriceStream(token, exchange, exchangeAddress);
+  const arbitrage = new Arbitrage(cexStream, dexStream, 5);
+  arbitrage.run();
 
   // Appove exchange to transfer tokens on behalf of owner.
   console.log("approving exchange to transfer tokens...");
@@ -60,6 +58,12 @@ async function main() {
   console.log("adding liquidity to exchange...");
   tx = await exchange.addLiquidity(INITIAL_POOL_USDT_IN_MICRO, { value: INITIAL_POOL_ETH_IN_WEI });
   await tx.wait();
+
+  process.on("SIGINT", () => {
+    console.log("shutting down program...");
+    arbitrage.end();
+    process.removeAllListeners();
+  });
 }
 
 function getExchangeAddressFromReceipt(receipt: ContractReceipt): string {

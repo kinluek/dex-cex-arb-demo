@@ -4,6 +4,8 @@ The project serves as a demo on how to perform arbitrage between a centralised o
 
 The code is not intended to be run on mainnet as is, as assumptions will be made to simplyify the demo while still demonstrating the main concepts.
 
+PS: Learning things as we go along...
+
 ## DEX
 
 For the DEX we will be using a solidity clone of the Uniswap V1 contracts (for simplicity) borrowed from https://github.com/Jeiwan/zuniswap with a few minor tweaks.

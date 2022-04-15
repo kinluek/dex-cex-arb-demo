@@ -5,7 +5,7 @@ import { BigNumber, Event, utils } from "ethers";
 /**
  * Prices are given in the smallest unit for each asset.
  */
-type Prices = {
+export type Prices = {
   ethInMicroUsdt: BigNumber;
   usdtInWei: BigNumber;
 };
@@ -13,7 +13,7 @@ type Prices = {
 /**
  * Callback provided to handle price updates from the exchange.
  */
-type OnPriceCallback = (msg: Prices) => void;
+export type OnPriceCallback = (msg: Prices) => void;
 
 /**
  * EthUsdtPriceStream subscribes to price changes of ETH and USDT from the exchange.
