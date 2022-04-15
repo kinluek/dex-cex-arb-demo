@@ -1,6 +1,6 @@
 import { Token, Exchange } from "../../typechain";
 import { ethers } from "hardhat";
-import { BigNumber, utils } from "ethers";
+import { BigNumber, Event, utils } from "ethers";
 
 /**
  * Prices are given in the smallest unit for each asset.
@@ -19,27 +19,43 @@ type OnPriceCallback = (msg: Prices) => void;
  * EthUsdtPriceStream subscribes to price changes of ETH and USDT from the exchange.
  */
 export class EthUsdtPriceStream {
-  constructor(
-    private token: Token,
-    private exchange: Exchange,
-    readonly exchangeAddress: string,
-    private onPriceCallback: OnPriceCallback
-  ) {
-    const filterFromExchange = token.filters.Transfer(exchangeAddress);
-    const filterToExchange = token.filters.Transfer(null, exchangeAddress);
+  private latestBlockNumber = 0;
+  private token: Token;
+  private exchange: Exchange;
+  readonly exchangeAddress: string;
 
-    // any transfer to or from the exchange will cause a price change.
-    // for every event, we calcuate the current prices based on the liquidity ratios.
-    this.token.on(filterFromExchange, () => this.getExchangePrices(this.exchange));
-    this.token.on(filterToExchange, () => this.getExchangePrices(this.exchange));
+  constructor(token: Token, exchange: Exchange, exchangeAddress: string) {
+    this.token = token;
+    this.exchange = exchange;
+    this.exchangeAddress = exchangeAddress;
   }
 
-  private getExchangePrices = async (exchange: Exchange): Promise<void> => {
+  /**
+   * attach callback to handle price updates.
+   */
+  public listen(onPriceCallback: OnPriceCallback) {
+    const filterFromExchange = this.token.filters.Transfer(this.exchangeAddress);
+    const filterToExchange = this.token.filters.Transfer(null, this.exchangeAddress);
+    // any transfer to or from the exchange will cause a price change.
+    // for every event, we calcuate the current prices based on the liquidity ratios.
+    this.token.on(filterFromExchange, (...args) => this.getExchangePrices(args[3], this.exchange, onPriceCallback));
+    this.token.on(filterToExchange, (...args) => this.getExchangePrices(args[3], this.exchange, onPriceCallback));
+  }
+
+  private getExchangePrices = async (event: Event, exchange: Exchange, cb: OnPriceCallback): Promise<void> => {
+    // pools can only be updated once per block.
+    // this makes sure we are not polling the exchange more than we need to and removes
+    // out of order events.
+    if (event.blockNumber <= this.latestBlockNumber) {
+      return;
+    }
+    this.latestBlockNumber = event.blockNumber;
     const tokenAmount = await exchange.getReserve();
     const ethAmount = await ethers.provider.getBalance(exchange.address);
     const ethInMicroUsdt = utils.parseEther(tokenAmount.toString()).div(ethAmount);
     const usdtInWei = ethAmount.mul(10 ** 6).div(tokenAmount);
-    this.onPriceCallback({ ethInMicroUsdt, usdtInWei });
+    const prices: Prices = { ethInMicroUsdt, usdtInWei };
+    cb(prices);
   };
 
   public close = () => {

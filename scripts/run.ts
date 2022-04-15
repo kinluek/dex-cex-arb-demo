@@ -44,7 +44,7 @@ async function main() {
   // const priceOfEthInMicroUsdt = INITIAL_ETH_PRICE_IN_MICRO_USDT;
   // const priceOfUsdtInWei = INITIAL_USDT_PRICE_IN_WEI;
 
-  const priceDexPriceStream = new EthUsdtPriceStream(token, exchange, exchangeAddress, (p) => {
+  const priceDexPriceStream = new EthUsdtPriceStream(token, exchange, exchangeAddress).listen((p) => {
     const ethInMicroUsdt = utils.formatUnits(p.ethInMicroUsdt.toString(), 6);
     const usdtInWei = utils.formatEther(p.usdtInWei.toString());
     console.log(`new price of eth: ${ethInMicroUsdt} USDT`);
@@ -58,9 +58,7 @@ async function main() {
 
   // Add liquidity to the exchange.
   console.log("adding liquidity to exchange...");
-  tx = await exchange.addLiquidity(INITIAL_POOL_USDT_IN_MICRO, {
-    value: INITIAL_POOL_ETH_IN_WEI,
-  });
+  tx = await exchange.addLiquidity(INITIAL_POOL_USDT_IN_MICRO, { value: INITIAL_POOL_ETH_IN_WEI });
   await tx.wait();
 }
 

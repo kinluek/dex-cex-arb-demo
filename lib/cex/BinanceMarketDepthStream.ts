@@ -5,7 +5,7 @@ import WebSocket from "ws";
  */
 type MarketDepth = {
   e: string;
-  E: number;
+  E: number; // unix event time.
   s: string;
   U: number;
   u: number;
@@ -28,31 +28,44 @@ export class BinanceMarketDepthStream {
   private ws: WebSocket;
   private streamUrl: string;
   private lastReceiveTime;
+  private lastEventTime = 0;
   private CLOSE_CODE_END = 3000;
   private CLOSE_CODE_RECONN = 3001;
+  readonly marketId;
+  readonly timeoutMs;
 
-  constructor(readonly marketId: string, readonly timeoutMs: number, private onMessage: OnMessageCallback) {
+  constructor(marketId: string, timeoutMs: number) {
+    this.marketId = marketId;
+    this.timeoutMs = timeoutMs;
     this.lastReceiveTime = new Date().getTime();
     this.streamUrl = `wss://stream.binance.com:9443/ws/${marketId}@depth@1000ms`;
     this.ws = new WebSocket(this.streamUrl);
-    this.attachListeners(this.ws);
   }
 
-  private attachListeners = (ws: WebSocket) => {
+  public listen(onMessage: OnMessageCallback) {
+    this.attachListeners(this.ws, onMessage);
+  }
+
+  private attachListeners = (ws: WebSocket, onMessage: OnMessageCallback) => {
     ws.on("open", this.onOpen);
-    ws.on("message", this.onMessageWrapper());
+    ws.on("message", this.onMessageWrapper(onMessage));
     ws.on("error", this.onError);
-    ws.on("close", this.onClose);
+    ws.on("close", this.onCloseWrapper(onMessage));
   };
 
   /**
    * Wraps the user provided onMessage callback function to keep track of the last message
    * receive time which is used to determine whether the connection should reconnect.
+   * Out of date events are ignored.
    */
-  private onMessageWrapper = (): ((msg: Buffer) => void) => {
+  private onMessageWrapper = (onMessage: OnMessageCallback): ((msg: Buffer) => void) => {
     return (msg: Buffer) => {
       this.lastReceiveTime = new Date().getTime();
-      this.onMessage(JSON.parse(msg.toString()));
+      const event: MarketDepth = JSON.parse(msg.toString());
+      if (event.E <= this.lastEventTime) {
+        return;
+      }
+      onMessage(JSON.parse(msg.toString()));
     };
   };
 
@@ -72,18 +85,23 @@ export class BinanceMarketDepthStream {
     console.log(`error received on websocket: ${err}`);
   };
 
-  private onClose = (code: number, reason: Buffer) => {
-    if (code !== this.CLOSE_CODE_END) {
-      console.log("connection was closed unexpectedly");
-      console.log(`code: ${code} - reason: ${reason.toString()}`);
-      console.log("reconnecting...");
-      this.ws = new WebSocket(this.streamUrl);
-      this.attachListeners(this.ws);
-    }
-    console.log("connection was closed");
+  /**
+   * Makes sure websocket is reopened and configured in case of unexpected closure.
+   */
+  private onCloseWrapper = (onMessage: OnMessageCallback): ((code: number, reason: Buffer) => void) => {
+    return (code: number, reason: Buffer) => {
+      if (code !== this.CLOSE_CODE_END) {
+        console.log("connection was closed unexpectedly");
+        console.log(`code: ${code} - reason: ${reason.toString()}`);
+        console.log("reconnecting...");
+        this.ws = new WebSocket(this.streamUrl);
+        this.attachListeners(this.ws, onMessage);
+      }
+      console.log("connection was closed");
+    };
   };
 
-  public close = () => {
+  public close() {
     this.ws.close(this.CLOSE_CODE_END);
-  };
+  }
 }
