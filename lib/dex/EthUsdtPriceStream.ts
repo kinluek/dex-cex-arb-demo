@@ -31,18 +31,29 @@ export class EthUsdtPriceStream {
   }
 
   /**
-   * attach callback to handle price updates.
+   * Listen to exchange price changes in realtime.
    */
   public listen(onPriceCallback: OnPriceCallback) {
     const filterFromExchange = this.token.filters.Transfer(this.exchangeAddress);
     const filterToExchange = this.token.filters.Transfer(null, this.exchangeAddress);
     // any transfer to or from the exchange will cause a price change.
     // for every event, we calcuate the current prices based on the liquidity ratios.
-    this.token.on(filterFromExchange, (...args) => this.getExchangePrices(args[3], this.exchange, onPriceCallback));
-    this.token.on(filterToExchange, (...args) => this.getExchangePrices(args[3], this.exchange, onPriceCallback));
+    this.token.on(filterFromExchange, (...args) => this.handleOnPriceCallback(args[3], onPriceCallback));
+    this.token.on(filterToExchange, (...args) => this.handleOnPriceCallback(args[3], onPriceCallback));
   }
 
-  private getExchangePrices = async (event: Event, exchange: Exchange, cb: OnPriceCallback): Promise<void> => {
+  /**
+   * Get the current exchange price.
+   */
+  public async getExchangePrices(): Promise<Prices> {
+    const tokenAmount = await this.exchange.getReserve();
+    const ethAmount = await ethers.provider.getBalance(this.exchange.address);
+    const ethInMicroUsdt = utils.parseEther(tokenAmount.toString()).div(ethAmount);
+    const usdtInWei = ethAmount.mul(10 ** 6).div(tokenAmount);
+    return { ethInMicroUsdt, usdtInWei };
+  }
+
+  private handleOnPriceCallback = async (event: Event, cb: OnPriceCallback): Promise<void> => {
     // pools can only be updated once per block.
     // this makes sure we are not polling the exchange more than we need to and removes
     // out of order events.
@@ -50,11 +61,7 @@ export class EthUsdtPriceStream {
       return;
     }
     this.latestBlockNumber = event.blockNumber;
-    const tokenAmount = await exchange.getReserve();
-    const ethAmount = await ethers.provider.getBalance(exchange.address);
-    const ethInMicroUsdt = utils.parseEther(tokenAmount.toString()).div(ethAmount);
-    const usdtInWei = ethAmount.mul(10 ** 6).div(tokenAmount);
-    const prices: Prices = { ethInMicroUsdt, usdtInWei };
+    const prices = await this.getExchangePrices();
     cb(prices);
   };
 

@@ -1,5 +1,5 @@
 import { BigNumber, utils } from "ethers";
-import { BinanceMarketDepthStream, MarketDepth } from "../cex";
+import { BinanceMarketDepthStream, MarketDepthStreamEvent } from "../cex";
 import { EthUsdtPriceStream, Prices } from "../dex";
 
 // Abritrage program which watches for opportunies between the exchanges and
@@ -32,21 +32,33 @@ export class Arbitrage {
     this.percentageDiffTarget = utils.parseUnits(percentageDiffTarget.toString(), 6);
   }
 
-  public run(): void {
+  public async run(): Promise<void> {
     // TODO: make calls to initialise pricing information before setting listeners.
+    const { ethInMicroUsdt, usdtInWei } = await this.dexStream.getExchangePrices();
+    const { bids, asks } = await this.cexStream.getOrderBook();
+
+    this.dexPriceOfEthInMicroUsdt = ethInMicroUsdt;
+    this.dexPriceOfUsdtInWei = usdtInWei;
+    console.log(`DEX: ETH PRICE: ${ethInMicroUsdt} microUSDT`);
+    console.log(`DEX: USDT PRICE: ${usdtInWei} WEI`);
+
+    this.cexHighestBidInMicroUsdt = utils.parseUnits(bids[0][0], 6);
+    this.cexLowestAskInMicroUsdt = utils.parseUnits(asks[0][0], 6);
+    console.log(`CEX: HIGHEST BID: ${this.cexHighestBidInMicroUsdt} microUSDT`);
+    console.log(`CEX: LOWEST ASK: ${this.cexLowestAskInMicroUsdt} microUSDT`);
 
     this.cexStream.listen(this.onCexDepth);
     this.dexStream.listen(this.onDexPrice);
   }
 
-  private onCexDepth = ({ b, a }: MarketDepth) => {
+  private onCexDepth = ({ b, a }: MarketDepthStreamEvent) => {
     if (b.length > 0) {
       const highestBid = b[0][0];
       const newBigInMicroUsdt = utils.parseUnits(highestBid, 6);
       if (!newBigInMicroUsdt.eq(this.cexHighestBidInMicroUsdt)) {
         console.log(`CEX: NEW HIGHEST BID: ${newBigInMicroUsdt} microUSDT`);
         this.cexHighestBidInMicroUsdt = newBigInMicroUsdt;
-        // this.executeArbIfFeasible();
+        this.executeArbIfFeasible();
       }
     }
     if (a.length > 0) {
@@ -55,7 +67,7 @@ export class Arbitrage {
       if (!newLowestAsk.eq(this.cexLowestAskInMicroUsdt)) {
         console.log(`CEX: NEW LOWEST ASK: ${newLowestAsk} microUSDT`);
         this.cexLowestAskInMicroUsdt = newLowestAsk;
-        // this.executeArbIfFeasible();
+        this.executeArbIfFeasible();
       }
     }
   };
@@ -65,7 +77,7 @@ export class Arbitrage {
     console.log(`DEX: USDT PRICE: ${usdtInWei} WEI`);
     this.dexPriceOfEthInMicroUsdt = ethInMicroUsdt;
     this.dexPriceOfUsdtInWei = usdtInWei;
-    // this.executeArbIfFeasible();
+    this.executeArbIfFeasible();
   };
 
   /**
@@ -80,23 +92,24 @@ export class Arbitrage {
     const bidDiff = this.getPercentageDifference(this.cexHighestBidInMicroUsdt);
 
     // If people are selling ETH on CEX at a lower price than on DEX
-    if (askDiff <= this.percentageDiffTarget.mul(-1)) {
+    if (askDiff.lte(this.percentageDiffTarget.mul(-1))) {
       // buy ETH on Cex and sell ETH on Dex
       console.log("ARB OPPORTUNITY SPOTTED: buy ETH on Cex and sell ETH on Dex");
     }
 
     // If people are buying ETH on CEX at a higher price than on DEX
-    if (bidDiff >= this.percentageDiffTarget) {
+    if (bidDiff.gte(this.percentageDiffTarget)) {
       // buy ETH on Dex and sell ETH on Cex
       console.log("ARB OPPORTUNITY SPOTTED: buy ETH on Dex and sell ETH on Cex");
     }
   }
 
   private getPercentageDifference(cexPrice: BigNumber): BigNumber {
-    return cexPrice
+    const percentDiff = cexPrice
       .sub(this.dexPriceOfEthInMicroUsdt)
       .mul(10 ** 8)
       .div(this.dexPriceOfEthInMicroUsdt);
+    return percentDiff;
   }
 
   public end() {

@@ -1,22 +1,29 @@
 import WebSocket from "ws";
+import axios from "axios";
+
+export type OrderBook = {
+  lastUpdateId: number;
+  bids: Array<string[2]>; // bids
+  asks: Array<string[2]>; // asks
+};
 
 /**
  * Market depth message received on the binance depth websocket stream.
  */
-export type MarketDepth = {
+export type MarketDepthStreamEvent = {
   e: string;
   E: number; // unix event time.
   s: string;
   U: number;
   u: number;
-  b: Array<string[]>; // bids
-  a: Array<string[]>; // asks
+  b: Array<string[2]>; // bids
+  a: Array<string[2]>; // asks
 };
 
 /**
  * Callback provided to the BinanceMarketDepthStream instance to handle depth messages.
  */
-export type OnDepthCallback = (msg: MarketDepth) => void;
+export type OnDepthCallback = (msg: MarketDepthStreamEvent) => void;
 
 /**
  * BinanceMarketDepthStream subscribes to a binance depth screen and has functionality
@@ -27,6 +34,7 @@ export type OnDepthCallback = (msg: MarketDepth) => void;
 export class BinanceMarketDepthStream {
   private ws: WebSocket;
   private streamUrl: string;
+  private orderBookUrl: string;
   private lastReceiveTime;
   private lastEventTime = 0;
   private CLOSE_CODE_END = 3000;
@@ -38,12 +46,24 @@ export class BinanceMarketDepthStream {
     this.marketId = marketId;
     this.timeoutMs = timeoutMs;
     this.lastReceiveTime = new Date().getTime();
-    this.streamUrl = `wss://stream.binance.com:9443/ws/${marketId}@depth@100ms`;
+    this.streamUrl = `wss://stream.binance.com:9443/ws/${marketId.toLowerCase()}@depth@100ms`;
+    this.orderBookUrl = `https://api.binance.com/api/v3/depth?symbol=${marketId.toUpperCase()}`;
     this.ws = new WebSocket(this.streamUrl);
   }
 
+  /**
+   * Listen to market depth updates on the exchange.
+   */
   public listen(onMessage: OnDepthCallback) {
     this.attachListeners(this.ws, onMessage);
+  }
+
+  /**
+   * Get the current order book.
+   */
+  public async getOrderBook(): Promise<OrderBook> {
+    const resp = await axios.get<OrderBook>(this.orderBookUrl);
+    return resp.data;
   }
 
   private attachListeners = (ws: WebSocket, onMessage: OnDepthCallback) => {
@@ -61,7 +81,7 @@ export class BinanceMarketDepthStream {
   private onMessageWrapper = (onMessage: OnDepthCallback): ((msg: Buffer) => void) => {
     return (msg: Buffer) => {
       this.lastReceiveTime = new Date().getTime();
-      const event: MarketDepth = JSON.parse(msg.toString());
+      const event: MarketDepthStreamEvent = JSON.parse(msg.toString());
       if (event.E <= this.lastEventTime) {
         return;
       }
