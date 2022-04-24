@@ -1,12 +1,15 @@
 import { BigNumber, utils } from "ethers";
 import { BinanceMarketDepthStream, MarketDepthStreamEvent } from "../cex";
 import { EthUsdtPriceStream, Prices } from "../dex";
+import { GasStation } from "../gas/GasStation";
 
 // Abritrage program which watches for opportunies between the exchanges and
 // executes trades.
 export class Arbitrage {
   private cexStream;
   private dexStream;
+
+  private gasStation;
 
   /**
    * only looks for abritrage opportunies with a percentage difference
@@ -23,17 +26,22 @@ export class Arbitrage {
   /**
    * percentage provided must be greater than zero
    */
-  constructor(cexStream: BinanceMarketDepthStream, dexStream: EthUsdtPriceStream, percentageDiffTarget: number) {
+  constructor(
+    cexStream: BinanceMarketDepthStream,
+    dexStream: EthUsdtPriceStream,
+    gasStation: GasStation,
+    percentageDiffTarget: number
+  ) {
     if (percentageDiffTarget <= 0) throw Error("must provide percentageDiffTarget value greater than 0");
     this.cexStream = cexStream;
     this.dexStream = dexStream;
+    this.gasStation = gasStation;
 
     // get the percentage in the same units as microUSDT ie 100,500,000 == 100.500000% 10,000,000 == 10.000000%
     this.percentageDiffTarget = utils.parseUnits(percentageDiffTarget.toString(), 6);
   }
 
   public async run(): Promise<void> {
-    // TODO: make calls to initialise pricing information before setting listeners.
     const { ethInMicroUsdt, usdtInWei } = await this.dexStream.getExchangePrices();
     const { bids, asks } = await this.cexStream.getOrderBook();
 
@@ -51,14 +59,14 @@ export class Arbitrage {
     this.dexStream.listen(this.onDexPrice);
   }
 
-  private onCexDepth = ({ b, a }: MarketDepthStreamEvent) => {
+  private onCexDepth = async ({ b, a }: MarketDepthStreamEvent) => {
     if (b.length > 0) {
       const highestBid = b[0][0];
       const newBigInMicroUsdt = utils.parseUnits(highestBid, 6);
       if (!newBigInMicroUsdt.eq(this.cexHighestBidInMicroUsdt)) {
         console.log(`CEX: NEW HIGHEST BID: ${newBigInMicroUsdt} microUSDT`);
         this.cexHighestBidInMicroUsdt = newBigInMicroUsdt;
-        this.executeArbIfFeasible();
+        await this.executeArbIfFeasible();
       }
     }
     if (a.length > 0) {
@@ -67,17 +75,17 @@ export class Arbitrage {
       if (!newLowestAsk.eq(this.cexLowestAskInMicroUsdt)) {
         console.log(`CEX: NEW LOWEST ASK: ${newLowestAsk} microUSDT`);
         this.cexLowestAskInMicroUsdt = newLowestAsk;
-        this.executeArbIfFeasible();
+        await this.executeArbIfFeasible();
       }
     }
   };
 
-  private onDexPrice = ({ ethInMicroUsdt, usdtInWei }: Prices) => {
+  private onDexPrice = async ({ ethInMicroUsdt, usdtInWei }: Prices) => {
     console.log(`DEX: ETH PRICE: ${ethInMicroUsdt} microUSDT`);
     console.log(`DEX: USDT PRICE: ${usdtInWei} WEI`);
     this.dexPriceOfEthInMicroUsdt = ethInMicroUsdt;
     this.dexPriceOfUsdtInWei = usdtInWei;
-    this.executeArbIfFeasible();
+    await this.executeArbIfFeasible();
   };
 
   /**
@@ -87,7 +95,7 @@ export class Arbitrage {
    * We will use https://ethgasstation.info/api/ethgasAPI.json? to find the fastest gas price to make sure
    * transactions are prioritised.
    */
-  private executeArbIfFeasible() {
+  private async executeArbIfFeasible() {
     const askDiff = this.getPercentageDifference(this.cexLowestAskInMicroUsdt);
     const bidDiff = this.getPercentageDifference(this.cexHighestBidInMicroUsdt);
 
@@ -95,12 +103,16 @@ export class Arbitrage {
     if (askDiff.lte(this.percentageDiffTarget.mul(-1))) {
       // buy ETH on Cex and sell ETH on Dex
       console.log("ARB OPPORTUNITY SPOTTED: buy ETH on Cex and sell ETH on Dex");
+      const gasPrice = await this.gasStation.getFastestPriceInWei();
+      console.log(`FASTEST GAS PRICE: ${gasPrice.toString()}`);
     }
 
     // If people are buying ETH on CEX at a higher price than on DEX
     if (bidDiff.gte(this.percentageDiffTarget)) {
       // buy ETH on Dex and sell ETH on Cex
       console.log("ARB OPPORTUNITY SPOTTED: buy ETH on Dex and sell ETH on Cex");
+      const gasPrice = await this.gasStation.getFastestPriceInWei();
+      console.log(`FASTEST GAS PRICE: ${gasPrice.toString()}`);
     }
   }
 
@@ -115,5 +127,6 @@ export class Arbitrage {
   public end() {
     this.cexStream.close();
     this.dexStream.close();
+    this.gasStation.close();
   }
 }

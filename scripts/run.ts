@@ -3,6 +3,7 @@ import { ethers, network } from "hardhat";
 import { Arbitrage } from "../lib/arb/Arbitrage";
 import { BinanceMarketDepthStream } from "../lib/cex";
 import { EthUsdtPriceStream } from "../lib/dex";
+import { GasStation } from "../lib/gas/GasStation";
 const { utils } = ethers;
 
 /**
@@ -14,7 +15,7 @@ const INITIAL_POOL_ETH = 10000;
 const INITIAL_POOL_ETH_IN_WEI = utils.parseEther(INITIAL_POOL_ETH.toString());
 const INITIAL_POOL_USDT_IN_MICRO = INITIAL_ETH_PRICE_IN_MICRO_USDT.mul(INITIAL_POOL_ETH);
 const INITIAL_USDT_PRICE_IN_WEI = INITIAL_POOL_ETH_IN_WEI.mul(10 ** 6).div(INITIAL_POOL_USDT_IN_MICRO);
-const ARB_PERCENTAGE_DIFF_TARGET = 5; // Arbitrage bot will look for price differences between exchanges that exceed this percentage.
+const ARB_PERCENTAGE_DIFF_TARGET = 1; // Arbitrage bot will look for price differences between exchanges that exceed this percentage.
 
 console.log("ETH PRICE IN MIRCO USDT: ", INITIAL_ETH_PRICE_IN_MICRO_USDT.toString());
 console.log("USDT PRICE IN WEI: ", INITIAL_USDT_PRICE_IN_WEI.toString());
@@ -57,7 +58,8 @@ async function main() {
   // Run arbitrage bot
   const cexStream = new BinanceMarketDepthStream("ethusdt", 3000);
   const dexStream = new EthUsdtPriceStream(token, exchange, exchangeAddress);
-  const arbitrage = new Arbitrage(cexStream, dexStream, ARB_PERCENTAGE_DIFF_TARGET);
+  const gasStation = new GasStation(60 * 1000);
+  const arbitrage = new Arbitrage(cexStream, dexStream, gasStation, ARB_PERCENTAGE_DIFF_TARGET);
   await arbitrage.run();
 
   process.on("SIGINT", () => {
